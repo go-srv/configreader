@@ -71,7 +71,7 @@ func TestDataTypes(t *testing.T) {
 		String    string        `key:"str"`
 		Duration  time.Duration `key:"dur"`
 
-		Map   map[string]int
+		Map   map[string]string
 		Slice []string
 
 		MyInt    MyInt
@@ -112,7 +112,23 @@ func TestDataTypes(t *testing.T) {
 		"boolfalse": "false",
 		"str": "something",
 		"myint": "23",
-		"dur": "86400s"
+		"dur": "86400s",
+        "map": {
+            "k1": "v1",
+            "k2": "v2"
+        },
+        "mymap": {
+            "k1": "1",
+            "k2": "2"
+        },
+        "slice": [
+            "s1",
+            "s2"
+        ],
+        "myslice": [
+            "1",
+            "2"
+        ]
 	}`)
 
 	fs := afero.NewMemMapFs()
@@ -151,6 +167,16 @@ func TestDataTypes(t *testing.T) {
 	assert.Equal(t, MyInt(23), conf.MyInt)
 
 	assert.Equal(t, time.Second*86400, conf.Duration)
+
+	assert.Equal(t, 1, conf.MyMap["k1"])
+	assert.Equal(t, 2, conf.MyMap["k2"])
+	assert.Equal(t, "v1", conf.Map["k1"])
+	assert.Equal(t, "v2", conf.Map["k2"])
+
+	assert.Equal(t, 1, conf.MySlice[0])
+	assert.Equal(t, 2, conf.MySlice[1])
+	assert.Equal(t, "s1", conf.Slice[0])
+	assert.Equal(t, "s2", conf.Slice[1])
 }
 
 func TestLoadDefault(t *testing.T) {

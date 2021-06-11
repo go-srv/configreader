@@ -288,3 +288,29 @@ func TestReadConfig(t *testing.T) {
 
 	assert.Equal(t, -333, conf.Int)
 }
+
+func TestDumpConfig(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	type MyStruct struct {
+		MapS2I map[string]int    `default:"{\"K1\":1, \"k2\":2}"`
+		MapS2S map[string]string `default:"{\"K1\":\"V1\", \"k2\":\"2\"}"`
+	}
+
+	conf := MyStruct{}
+
+	err := LoadDefault(&conf)
+	assert.Nil(t, err)
+
+	filename := "/tmp/test_config.yaml"
+	err = DumpConfig(filename, &conf)
+	assert.Nil(t, err)
+
+	buf, err := afero.ReadFile(fs, filename)
+	assert.Nil(t, err)
+	assert.Equal(t, "maps2i:\n  K1: 1\n  k2: 2\nmaps2s:\n  K1: V1\n  k2: \"2\"\n", string(buf))
+}

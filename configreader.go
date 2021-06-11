@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"golang.org/x/xerrors"
+	"gopkg.in/yaml.v2"
 )
 
 // tags for parse the config struct tag annotations
@@ -542,4 +543,85 @@ func walkThroughStruct(rootKey string, structRef reflect.Value, processField Fie
 func isZeroOfUnderlyingType(x interface{}) bool {
 	// Source: http://stackoverflow.com/questions/13901819/quick-way-to-detect-empty-values-via-reflection-in-go
 	return x == reflect.Zero(reflect.TypeOf(x)).Interface()
+}
+
+////////
+// For dump config to file
+
+// DumpConfig wraps the global ConfigReader instance
+func DumpConfig(filename string, confPtr interface{}) error {
+	return c.DumpConfig(filename, confPtr)
+}
+
+// DumpConfig dumps the merged config to filepath
+func (c *ConfigReader) DumpConfig(filename string, confPtr interface{}) error {
+	var configType string
+
+	ext := filepath.Ext(filename)
+	if ext != "" {
+		configType = ext[1:]
+	} else {
+		return fmt.Errorf("config type could not be determined for %s", filename)
+	}
+
+	if !stringInSlice(configType, SupportedExts) {
+		return fmt.Errorf("config type [%s] is not supported", configType)
+	}
+
+	config := confPtr
+	if config == nil {
+		config = make(map[string]interface{})
+	}
+
+	force := false
+	flags := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+	if !force {
+		flags |= os.O_EXCL
+	}
+	filePermission := os.FileMode(0644)
+	f, err := c.fs.OpenFile(filename, flags, filePermission)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if err := marshalWriter(f, configType, config); err != nil {
+		return err
+	}
+
+	return f.Sync()
+}
+
+var SupportedExts = []string{"json", "yaml", "yml"}
+
+func marshalWriter(f afero.File, configType string, config interface{}) error {
+	switch configType {
+	case "json":
+		b, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = f.WriteString(string(b))
+		if err != nil {
+			return err
+		}
+	case "yaml", "yml":
+		b, err := yaml.Marshal(config)
+		if err != nil {
+			return err
+		}
+		if _, err = f.WriteString(string(b)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if a == b {
+			return true
+		}
+	}
+	return false
 }

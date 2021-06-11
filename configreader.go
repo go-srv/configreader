@@ -2,6 +2,7 @@ package configreader
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"io"
@@ -467,6 +468,24 @@ func populateStructField(field reflect.StructField, fieldValue reflect.Value, va
 		if isZeroOfUnderlyingType(fieldValue.Interface()) {
 			fieldValue.SetUint(intValue)
 		}
+	case reflect.Slice, reflect.Array:
+		ref := reflect.New(fieldValue.Type())
+		ref.Elem().Set(reflect.MakeSlice(fieldValue.Type(), 0, 0))
+		if value != "" && value != "[]" {
+			if err := json.Unmarshal([]byte(value), ref.Interface()); err != nil {
+				return err
+			}
+		}
+		fieldValue.Set(ref.Elem().Convert(fieldValue.Type()))
+	case reflect.Map:
+		ref := reflect.New(fieldValue.Type())
+		ref.Elem().Set(reflect.MakeMap(fieldValue.Type()))
+		if value != "" && value != "{}" {
+			if err := json.Unmarshal([]byte(value), ref.Interface()); err != nil {
+				return err
+			}
+		}
+		fieldValue.Set(ref.Elem().Convert(fieldValue.Type()))
 	}
 	return nil
 }

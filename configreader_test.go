@@ -239,6 +239,38 @@ func TestRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "required")
 }
 
+func TestSliceDefault(t *testing.T) {
+	type MyStruct struct {
+		IntSlice []int `default:"[8,10]"`
+	}
+
+	conf := MyStruct{}
+
+	err := LoadDefault(&conf)
+	assert.Nil(t, err)
+
+	assert.Equal(t, int(8), conf.IntSlice[0])
+	assert.Equal(t, int(10), conf.IntSlice[1])
+}
+
+func TestMapDefault(t *testing.T) {
+	type MyStruct struct {
+		MapS2I map[string]int    `default:"{\"k1\":1, \"k2\":2}"`
+		MapS2S map[string]string `default:"{\"k1\":\"1\", \"k2\":\"2\"}"`
+	}
+
+	conf := MyStruct{}
+
+	err := LoadDefault(&conf)
+	assert.Nil(t, err)
+
+	assert.Equal(t, int(1), conf.MapS2I["k1"])
+	assert.Equal(t, int(2), conf.MapS2I["k2"])
+
+	assert.Equal(t, "1", conf.MapS2S["k1"])
+	assert.Equal(t, "2", conf.MapS2S["k2"])
+}
+
 func TestReadConfig(t *testing.T) {
 	defer testTearDown()
 

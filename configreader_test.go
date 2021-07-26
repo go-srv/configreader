@@ -2,10 +2,12 @@ package configreader
 
 import (
 	"bytes"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/spf13/afero"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -313,4 +315,64 @@ func TestDumpConfig(t *testing.T) {
 	buf, err := afero.ReadFile(fs, filename)
 	assert.Nil(t, err)
 	assert.Equal(t, "maps2i:\n  K1: 1\n  k2: 2\nmaps2s:\n  K1: V1\n  k2: \"2\"\n", string(buf))
+}
+
+func TestEnvValue(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"k": "file_val"
+	}`)
+	err := writeFile(fs, "/tmp/config.json", configData)
+	assert.Nil(t, err)
+
+	type MyStruct struct {
+		K string `env:"k",default:"default"`
+	}
+
+	os.Setenv("APP_K", "env_val")
+
+	conf := MyStruct{}
+
+	SetEnvPrefix("APP")
+	AddConfigPath("/tmp")
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "env_val", conf.K)
+}
+
+func TestFlagValue(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"k": "file_val"
+	}`)
+	err := writeFile(fs, "/tmp/config.json", configData)
+	assert.Nil(t, err)
+
+	type MyStruct struct {
+		K string `flag:"k",default:"default"`
+	}
+
+	conf := MyStruct{}
+
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flagSet.String("k", "flag_default_val", "")
+	flagSet.Set("k", "flag_val")
+
+	SetFlagSet(flagSet)
+	AddConfigPath("/tmp")
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "flag_val", conf.K)
 }

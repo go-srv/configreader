@@ -15,6 +15,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/afero"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"golang.org/x/xerrors"
@@ -46,6 +47,7 @@ var (
 type ConfigReader struct {
 	viper   *viper.Viper
 	flagset *pflag.FlagSet
+	flagCmd *cobra.Command
 
 	// config file name and paths to search for
 	configName  string
@@ -127,7 +129,7 @@ func (c *ConfigReader) ReadFromFile(filename string, confPtr interface{}) error 
 
 	ext := filepath.Ext(filename)
 	if len(ext) <= 1 {
-		return fmt.Errorf("Filename: %s requires valid extension.", filename)
+		return fmt.Errorf("filename: %s requires valid extension", filename)
 	}
 	configType := ext[1:]
 	return c.ReadConfig(bytes.NewReader(file), configType, confPtr)
@@ -202,6 +204,11 @@ func SetFlagSet(flag *pflag.FlagSet) { c.SetFlagSet(flag) }
 // SetFlagSet set the flagset to lookup
 func (c *ConfigReader) SetFlagSet(flag *pflag.FlagSet) {
 	c.flagset = flag
+}
+
+// SetFlagCommand set which command to lookup
+func SetFlagCommand(command *cobra.Command) {
+	c.flagCmd = command
 }
 
 // Debug print viper values
@@ -376,6 +383,16 @@ func (c *ConfigReader) bindEnvValue(fieldkey string, envname string) error {
 func (c *ConfigReader) bindFlagValue(fieldkey string, flagname string, defval string) error {
 	if flagname != "" {
 		var flag *pflag.Flag
+
+		// first try the cobra.Command if it's set
+		if c.flagCmd != nil {
+			flag = c.flagCmd.Flags().Lookup(flagname)
+			if flag != nil {
+				return c.viper.BindPFlag(fieldkey, flag)
+			}
+		}
+
+		// Not in the command, try search PFlags
 		if c.flagset == nil {
 			pflag.String(flagname, "", flagname)
 			flag = pflag.Lookup(flagname)

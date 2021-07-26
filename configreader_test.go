@@ -331,7 +331,7 @@ func TestEnvValue(t *testing.T) {
 	assert.Nil(t, err)
 
 	type MyStruct struct {
-		K string `env:"k",default:"default"`
+		K string `env:"k" default:"default"`
 	}
 
 	os.Setenv("APP_K", "env_val")
@@ -360,7 +360,7 @@ func TestFlagValue(t *testing.T) {
 	assert.Nil(t, err)
 
 	type MyStruct struct {
-		K string `flag:"k",default:"default"`
+		K string `flag:"k" default:"default"`
 	}
 
 	conf := MyStruct{}
@@ -375,4 +375,34 @@ func TestFlagValue(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, "flag_val", conf.K)
+}
+
+func TestAnonymousNestedConfig(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"base": "file_val"
+	}`)
+	err := writeFile(fs, "/tmp/config.json", configData)
+	assert.Nil(t, err)
+
+	type BaseStruct struct {
+		Base string
+	}
+
+	type MyStruct struct {
+		BaseStruct `key:",squash"`
+	}
+
+	conf := MyStruct{}
+
+	AddConfigPath("/tmp")
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "file_val", conf.Base)
 }

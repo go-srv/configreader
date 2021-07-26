@@ -105,6 +105,17 @@ func (c *ConfigReader) LoadConfig(confPtr interface{}) error {
 	return c.loadConfig(confPtr)
 }
 
+// LoadFromFile loads configs by parsing the filepath and will load configs with several suffix
+func LoadFromFile(filePath string, confPtr interface{}) error {
+	return c.LoadFromFile(filePath, confPtr)
+}
+
+// LoadFromFile loads configs by parsing the filepath and will load configs with several suffix
+func (c *ConfigReader) LoadFromFile(filePath string, confPtr interface{}) error {
+	c.SetConfigFile(filePath)
+	return c.loadConfig(confPtr)
+}
+
 // ReadConfig wraps the global ConfigReader instance
 func ReadConfig(in io.Reader, confType string, confPtr interface{}) error {
 	return c.ReadConfig(in, confType, confPtr)
@@ -116,8 +127,8 @@ func (c *ConfigReader) ReadConfig(in io.Reader, confType string, confPtr interfa
 }
 
 // ReadFromFile wraps the global ConfigReader instance
-func ReadFromFile(filepath string, confPtr interface{}) error {
-	return c.ReadFromFile(filepath, confPtr)
+func ReadFromFile(filePath string, confPtr interface{}) error {
+	return c.ReadFromFile(filePath, confPtr)
 }
 
 // ReadFromFile read configs from the special file and set values into confPtr
@@ -133,6 +144,19 @@ func (c *ConfigReader) ReadFromFile(filename string, confPtr interface{}) error 
 	}
 	configType := ext[1:]
 	return c.ReadConfig(bytes.NewReader(file), configType, confPtr)
+}
+
+// SetConfigFile sets the config filename with path together
+func SetConfigFile(filePath string) { c.SetConfigFile(filePath) }
+
+// SetConfigFile sets the config filename with path together
+func (c *ConfigReader) SetConfigFile(filePath string) {
+	folder := filepath.Dir(filePath)
+	filename := filepath.Base(filePath)
+	basename := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	c.AddConfigPath(folder)
+	c.SetConfigName(basename)
 }
 
 // SetConfigName wraps the global ConfigReader instance
@@ -207,7 +231,10 @@ func (c *ConfigReader) SetFlagSet(flag *pflag.FlagSet) {
 }
 
 // SetFlagCommand set which command to lookup
-func SetFlagCommand(command *cobra.Command) {
+func SetFlagCommand(command *cobra.Command) { c.SetFlagCommand(command) }
+
+// SetFlagCommand set which command to lookup
+func (c *ConfigReader) SetFlagCommand(command *cobra.Command) {
 	c.flagCmd = command
 }
 

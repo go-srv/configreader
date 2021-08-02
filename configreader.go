@@ -547,9 +547,24 @@ func walkThroughStruct(rootKey string, structRef reflect.Value, processField Fie
 		structField := structType.Field(i)
 		tag := structField.Tag
 
+		squash := structField.Type.Kind() == reflect.Struct && structField.Anonymous
+
 		fieldKey := tag.Get(tagKey)
-		if len(fieldKey) <= 0 {
+		// Deal with the "," in the key defines, not pass it during the walk through
+		if strings.Contains(fieldKey, ",") {
+			keys := strings.Split(fieldKey, ",")
+			fieldKey = keys[0]
+
+			if keys[1] == "squash" {
+				squash = true
+			}
+		}
+		if len(fieldKey) <= 0 && !squash {
 			fieldKey = strings.ToLower(structField.Name)
+		}
+
+		if squash {
+			fieldKey = ""
 		}
 
 		if fieldKey == skipKey {
@@ -558,7 +573,11 @@ func walkThroughStruct(rootKey string, structRef reflect.Value, processField Fie
 
 		fullFieldKey := ""
 		if rootKey != "" {
-			fullFieldKey = rootKey + "." + fieldKey
+			if fieldKey != "" {
+				fullFieldKey = rootKey + "." + fieldKey
+			} else {
+				fullFieldKey = rootKey
+			}
 		} else {
 			fullFieldKey = fieldKey
 		}

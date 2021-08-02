@@ -406,3 +406,72 @@ func TestAnonymousNestedConfig(t *testing.T) {
 
 	assert.Equal(t, "file_val", conf.Base)
 }
+
+func TestAnonymousNestedConfigRequired(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"base": "file_val"
+	}`)
+	err := writeFile(fs, "/tmp/config.json", configData)
+	assert.Nil(t, err)
+
+	type BaseStruct struct {
+		Base string `required:"true"`
+	}
+
+	type MyStruct struct {
+		BaseStruct `key:",squash"`
+	}
+
+	type MyStruct2 struct {
+		BaseStruct
+	}
+
+	conf := MyStruct{}
+
+	AddConfigPath("/tmp")
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "file_val", conf.Base)
+}
+
+func TestAnonymousNestedConfigRequiredNotSet(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"base2": "file_val"
+	}`)
+	err := writeFile(fs, "/tmp/config.json", configData)
+	assert.Nil(t, err)
+
+	type BaseStruct struct {
+		Base string `required:"true"`
+	}
+
+	type MyStruct struct {
+		BaseStruct `key:",squash"`
+	}
+
+	type MyStruct2 struct {
+		BaseStruct
+	}
+
+	conf := MyStruct{}
+
+	AddConfigPath("/tmp")
+	err = LoadConfig(&conf)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "required", "should throw error on required not set")
+
+	assert.Equal(t, "", conf.Base)
+}

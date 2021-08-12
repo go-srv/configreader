@@ -194,6 +194,42 @@ func TestLoadDefault(t *testing.T) {
 	assert.Equal(t, int(8), conf.Int)
 }
 
+func TestStructSliceDefault(t *testing.T) {
+	// Skip this as currently seems viper only support string slice
+	t.Skip()
+
+	defer testTearDown()
+
+	type TestConfig struct {
+		K1 int `default:"1"`
+		K2 int `default:"2"`
+	}
+
+	type TestBase struct {
+		T []TestConfig
+	}
+
+	configData := []byte(`{
+			"t": [
+				{"k1": "111"}
+			]
+		}`)
+
+	fs := afero.NewMemMapFs()
+	err := writeFile(fs, "/tmp/config.json", configData)
+	assert.Nil(t, err)
+
+	SetFs(fs)
+	SetConfigName("config")
+	AddConfigPath("/tmp")
+
+	conf := TestBase{}
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+	assert.Equal(t, 111, conf.T[0].K1)
+	assert.Equal(t, 2, conf.T[0].K2)
+}
+
 func TestRequired(t *testing.T) {
 	defer testTearDown()
 

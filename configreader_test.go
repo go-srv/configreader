@@ -237,6 +237,7 @@ func TestRequired(t *testing.T) {
 		Required    int `required:"true"`
 		NotRequired int `required:"fasle"`
 		NotSet      int
+		Defaults    int `default:"666" required:"true"`
 	}
 
 	configDataOK := []byte(`{
@@ -510,4 +511,32 @@ func TestAnonymousNestedConfigRequiredNotSet(t *testing.T) {
 	assert.Contains(t, err.Error(), "required", "should throw error on required not set")
 
 	assert.Equal(t, "", conf.Base)
+}
+
+func TestValidationOK(t *testing.T) {
+	defer testTearDown()
+
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"val": "2"
+	}`)
+	filename := "/tmp/config.json"
+	err := writeFile(fs, filename, configData)
+	assert.Nil(t, err)
+
+	type Conf struct {
+		Val   int `validation:"range:[2, 9]"`
+		NoVal int `validation:"range:[2, 9]"`
+	}
+
+	conf := Conf{}
+
+	SetConfigName("config")
+	AddConfigPath("/tmp")
+
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
 }

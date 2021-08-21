@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,12 +24,13 @@ import (
 
 // tags for parse the config struct tag annotations
 const (
-	tagKey      = "key"
-	tagDefault  = "default"
-	tagFlag     = "flag"
-	tagEnv      = "env"
-	tagRequired = "required"
-	skipKey     = "-"
+	tagKey        = "key"
+	tagDefault    = "default"
+	tagFlag       = "flag"
+	tagEnv        = "env"
+	tagRequired   = "required"
+	tagValidation = "validation"
+	skipKey       = "-"
 
 	devEnv   = "dev"
 	localEnv = "local"
@@ -286,7 +288,7 @@ func (c *ConfigReader) loadConfig(confPtr interface{}) error {
 		return err
 	}
 
-	err = c.checkRequiredValues(confPtr)
+	err = c.checkValues(confPtr)
 	if err != nil {
 		return err
 	}
@@ -345,7 +347,7 @@ func (c *ConfigReader) readConfig(in io.Reader, configType string, confPtr inter
 		return err
 	}
 
-	err = c.checkRequiredValues(confPtr)
+	err = c.checkValues(confPtr)
 	if err != nil {
 		return err
 	}
@@ -414,10 +416,27 @@ func (c *ConfigReader) bindFlagValue(fieldkey string, flagname string, defval st
 	return nil
 }
 
-func (c *ConfigReader) checkRequiredValues(confPtr interface{}) error {
+////////// Check Values
+
+func (c *ConfigReader) checkValues(confPtr interface{}) error {
 	ref := reflect.ValueOf(confPtr).Elem()
 
-	return walkThroughStruct("", ref, c.checkRequiredValueOfField)
+	return walkThroughStruct("", ref, c.checkValueOfField)
+}
+
+func (c *ConfigReader) checkValueOfField(fieldKey string, structField reflect.StructField, structRef reflect.Value) error {
+	checkFns := []FieldProcessor{
+		c.checkRequiredValueOfField,
+		c.validateValueOfField,
+	}
+
+	for _, check := range checkFns {
+		if err := check(fieldKey, structField, structRef); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *ConfigReader) checkRequiredValueOfField(fieldKey string, structField reflect.StructField, structRef reflect.Value) error {
@@ -429,6 +448,294 @@ func (c *ConfigReader) checkRequiredValueOfField(fieldKey string, structField re
 	}
 
 	return nil
+}
+
+////////// Value Validation
+
+func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect.StructField, structRef reflect.Value) error {
+	// If there is no value, ignore the validation check
+	// If the value is required, it should use the require check
+	val := c.viper.Get(fieldKey)
+	if val == nil {
+		return nil
+	}
+
+	validation := structField.Tag.Get(tagValidation)
+	if len(validation) > 0 {
+		splits := strings.Split(validation, ":")
+		if len(splits) < 2 {
+			return fmt.Errorf("invalid validation [%s] of key [%s]", validation, fieldKey)
+		}
+
+		action := splits[0]
+		rules := splits[1]
+
+		if action != "in" && action != "range" {
+			return fmt.Errorf("unsupported action of validation [%s] of key [%s]", validation, fieldKey)
+		}
+		inAction := true
+		if action == "range" {
+			inAction = false
+		}
+
+		// Prepare for validation
+		validationFailed := fmt.Errorf("[%s] did not pass validation. want [%s] real [%v]", fieldKey, validation, val)
+		validationBadVal := fmt.Errorf("[%s] failed to parse validation values [%s]", fieldKey, validation)
+
+		var ruleSplits []string
+		var lAct, rAct, lValStr, rValStr string
+		var err error
+
+		if inAction {
+			rules = strings.TrimSpace(rules)
+			rules = strings.TrimLeft(rules, "[")
+			rules = strings.TrimRight(rules, "]")
+			ruleSplits = strings.Split(rules, ",")
+		} else {
+			lAct, rAct, lValStr, rValStr, err = parseRangeRule(rules)
+			if err != nil {
+				return err
+			}
+		}
+
+		// let's start check by value types
+		// Handle time.Duration as a special case
+		typeName := structField.Type.String()
+		switch typeName {
+		case "time.Duration":
+			val := c.viper.GetDuration(fieldKey)
+			if inAction {
+				ok := false
+				for _, s := range ruleSplits {
+					s = strings.TrimSpace(s)
+					v, err := time.ParseDuration(s)
+					if err != nil {
+						return validationBadVal
+					}
+
+					if val == v {
+						ok = true
+					}
+				}
+				if !ok {
+					return validationFailed
+				}
+			} else {
+				var lVal, rVal time.Duration
+				if lAct != "inf" {
+					lVal, err = time.ParseDuration(lValStr)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+				if rAct != "inf" {
+					rVal, err = time.ParseDuration(rValStr)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+
+				if (lAct == ">=" && val < lVal) ||
+					(lAct == ">" && val <= lVal) ||
+					(rAct == "<=" && val > rVal) ||
+					(rAct == "<" && val >= rVal) {
+					return validationFailed
+				}
+			}
+		}
+
+		// Handle base types
+		switch structRef.Kind() {
+		case reflect.String:
+			if inAction {
+				ok := false
+				for _, s := range ruleSplits {
+					s = strings.TrimSpace(s)
+					if val == s {
+						ok = true
+					}
+				}
+				if !ok {
+					return validationFailed
+				}
+			} else {
+				return fmt.Errorf("string does not support range validation [%s]", validation)
+			}
+		case reflect.Float32, reflect.Float64:
+			val := c.viper.GetFloat64(fieldKey)
+			if inAction {
+				ok := false
+				for _, s := range ruleSplits {
+					s = strings.TrimSpace(s)
+					v, err := strconv.ParseFloat(s, 64)
+					if err != nil {
+						return validationBadVal
+					}
+
+					if math.Abs(val-v) < 1e-3 {
+						ok = true
+					}
+				}
+				if !ok {
+					return validationFailed
+				}
+			} else {
+				var lVal, rVal float64
+				if lAct != "inf" {
+					lVal, err = strconv.ParseFloat(lValStr, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+				if rAct != "inf" {
+					rVal, err = strconv.ParseFloat(rValStr, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+
+				if (lAct == ">=" && val < lVal) ||
+					(lAct == ">" && val <= lVal) ||
+					(rAct == "<=" && val > rVal) ||
+					(rAct == "<" && val >= rVal) {
+					return validationFailed
+				}
+			}
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			val := c.viper.GetInt64(fieldKey)
+			if inAction {
+				ok := false
+				for _, s := range ruleSplits {
+					s = strings.TrimSpace(s)
+					v, err := strconv.ParseInt(s, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+
+					if val == v {
+						ok = true
+					}
+				}
+				if !ok {
+					return validationFailed
+				}
+			} else {
+				var lVal, rVal int64
+				if lAct != "inf" {
+					lVal, err = strconv.ParseInt(lValStr, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+				if rAct != "inf" {
+					rVal, err = strconv.ParseInt(rValStr, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+
+				if (lAct == ">=" && val < lVal) ||
+					(lAct == ">" && val <= lVal) ||
+					(rAct == "<=" && val > rVal) ||
+					(rAct == "<" && val >= rVal) {
+					return validationFailed
+				}
+			}
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			val := c.viper.GetUint64(fieldKey)
+			if inAction {
+				ok := false
+				for _, s := range ruleSplits {
+					s = strings.TrimSpace(s)
+					v, err := strconv.ParseUint(s, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+
+					if val == v {
+						ok = true
+					}
+				}
+				if !ok {
+					return validationFailed
+				}
+			} else {
+				var lVal, rVal uint64
+				if lAct != "inf" {
+					lVal, err = strconv.ParseUint(lValStr, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+				if rAct != "inf" {
+					rVal, err = strconv.ParseUint(rValStr, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+
+				if (lAct == ">=" && val < lVal) ||
+					(lAct == ">" && val <= lVal) ||
+					(rAct == "<=" && val > rVal) ||
+					(rAct == "<" && val >= rVal) {
+					return validationFailed
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func parseRangeRule(rules string) (lAct, rAct, lVal, rVal string, err error) {
+	invalidRule := fmt.Errorf("invalid range rule: [%s]", rules)
+
+	rules = strings.TrimSpace(rules)
+
+	switch rules[0] {
+	case '[':
+		lAct = ">="
+	case '(':
+		lAct = ">"
+	default:
+		err = invalidRule
+		return
+	}
+	rules = rules[1:]
+
+	last := len(rules) - 1
+	switch rules[last] {
+	case ']':
+		rAct = "<="
+	case ')':
+		rAct = "<"
+	default:
+		err = invalidRule
+		return
+	}
+	rules = rules[:last]
+
+	splits := strings.Split(rules, ",")
+	if len(splits) != 2 {
+		err = invalidRule
+		return
+	}
+
+	lVal = strings.TrimSpace(splits[0])
+	rVal = strings.TrimSpace(splits[1])
+
+	if len(lVal) == 0 {
+		lAct = "inf"
+	}
+	if len(rVal) == 0 {
+		rAct = "inf"
+	}
+	if lAct == "inf" && rAct == "inf" {
+		err = invalidRule
+		return
+	}
+
+	return
 }
 
 ////////

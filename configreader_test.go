@@ -182,8 +182,56 @@ func TestDataTypes(t *testing.T) {
 }
 
 func TestLoadDefault(t *testing.T) {
+	type (
+		MyInt     int
+		MyInt8    int8
+		MyInt16   int16
+		MyInt32   int32
+		MyInt64   int64
+		MyUint    uint
+		MyUint8   uint8
+		MyUint16  uint16
+		MyUint32  uint32
+		MyUint64  uint64
+		MyFloat32 float32
+		MyFloat64 float64
+		MyBool    bool
+		MyString  string
+	)
+
 	type MyStruct struct {
-		Int int `default:"8"`
+		Int       int           `default:"1"`
+		Int8      int8          `default:"8"`
+		Int16     int16         `default:"16"`
+		Int32     int32         `default:"32"`
+		Int64     int64         `default:"64"`
+		Uint      uint          `default:"1"`
+		Uint8     uint8         `default:"8"`
+		Uint16    uint16        `default:"16"`
+		Uint32    uint32        `default:"32"`
+		Uint64    uint64        `default:"64"`
+		Float32   float32       `default:"32.32"`
+		Float64   float64       `default:"64.64"`
+		BoolTrue  bool          `default:"true"`
+		BoolFalse bool          `default:"false"`
+		String    string        `key:"str" default:"test"`
+		Duration  time.Duration `key:"dur" default:"8s"`
+
+		MyInt       MyInt     `default:"1"`
+		MyInt8      MyInt8    `default:"8"`
+		MyInt16     MyInt16   `default:"16"`
+		MyInt32     MyInt32   `default:"32"`
+		MyInt64     MyInt64   `default:"64"`
+		MyUint      MyUint    `default:"1"`
+		MyUint8     MyUint8   `default:"8"`
+		MyUint16    MyUint16  `default:"16"`
+		MyUint32    MyUint32  `default:"32"`
+		MyUint64    MyUint64  `default:"64"`
+		MyFloat32   MyFloat32 `default:"32.32"`
+		MyFloat64   MyFloat64 `default:"64.64"`
+		MyBoolTrue  MyBool    `default:"true"`
+		MyBoolFalse MyBool    `default:"false"`
+		MyString    MyString  `key:"str" default:"test"`
 	}
 
 	conf := MyStruct{}
@@ -191,7 +239,44 @@ func TestLoadDefault(t *testing.T) {
 	err := LoadDefault(&conf)
 	assert.Nil(t, err)
 
-	assert.Equal(t, int(8), conf.Int)
+	assert.Equal(t, int(1), conf.Int)
+	assert.Equal(t, int8(8), conf.Int8)
+	assert.Equal(t, int16(16), conf.Int16)
+	assert.Equal(t, int32(32), conf.Int32)
+	assert.Equal(t, int64(64), conf.Int64)
+
+	assert.Equal(t, uint(1), conf.Uint)
+	assert.Equal(t, uint8(8), conf.Uint8)
+	assert.Equal(t, uint16(16), conf.Uint16)
+	assert.Equal(t, uint32(32), conf.Uint32)
+	assert.Equal(t, uint64(64), conf.Uint64)
+
+	assert.Equal(t, float32(32.32), conf.Float32)
+	assert.Equal(t, float64(64.64), conf.Float64)
+
+	assert.True(t, conf.BoolTrue)
+	assert.False(t, conf.BoolFalse)
+	assert.Equal(t, "test", conf.String)
+	assert.Equal(t, 8*time.Second, conf.Duration)
+
+	assert.Equal(t, MyInt(1), conf.MyInt)
+	assert.Equal(t, MyInt8(8), conf.MyInt8)
+	assert.Equal(t, MyInt16(16), conf.MyInt16)
+	assert.Equal(t, MyInt32(32), conf.MyInt32)
+	assert.Equal(t, MyInt64(64), conf.MyInt64)
+
+	assert.Equal(t, MyUint(1), conf.MyUint)
+	assert.Equal(t, MyUint8(8), conf.MyUint8)
+	assert.Equal(t, MyUint16(16), conf.MyUint16)
+	assert.Equal(t, MyUint32(32), conf.MyUint32)
+	assert.Equal(t, MyUint64(64), conf.MyUint64)
+
+	assert.Equal(t, MyFloat32(32.32), conf.MyFloat32)
+	assert.Equal(t, MyFloat64(64.64), conf.MyFloat64)
+
+	assert.Equal(t, MyBool(true), conf.MyBoolTrue)
+	assert.Equal(t, MyBool(false), conf.MyBoolFalse)
+	assert.Equal(t, MyString("test"), conf.MyString)
 }
 
 func TestStructSliceDefault(t *testing.T) {
@@ -345,13 +430,51 @@ func TestDumpConfig(t *testing.T) {
 	err := LoadDefault(&conf)
 	assert.Nil(t, err)
 
-	filename := "/tmp/test_config.yaml"
-	err = DumpConfig(filename, &conf)
+	contentYaml := `maps2i:
+  K1: 1
+  k2: 2
+maps2s:
+  K1: V1
+  k2: "2"
+`
+	yamlFile := "/tmp/test_config.yaml"
+	err = DumpConfig(yamlFile, &conf)
 	assert.Nil(t, err)
 
-	buf, err := afero.ReadFile(fs, filename)
+	bufYaml, err := afero.ReadFile(fs, yamlFile)
 	assert.Nil(t, err)
-	assert.Equal(t, "maps2i:\n  K1: 1\n  k2: 2\nmaps2s:\n  K1: V1\n  k2: \"2\"\n", string(buf))
+	assert.Equal(t, contentYaml, string(bufYaml))
+
+	ymlFile := "/tmp/test_config.yml"
+	err = DumpConfig(ymlFile, &conf)
+	assert.Nil(t, err)
+
+	bufYml, err := afero.ReadFile(fs, ymlFile)
+	assert.Nil(t, err)
+	assert.Equal(t, contentYaml, string(bufYml))
+
+	contentJson := `{
+  "MapS2I": {
+    "K1": 1,
+    "k2": 2
+  },
+  "MapS2S": {
+    "K1": "V1",
+    "k2": "2"
+  }
+}`
+	jsonFile := "/tmp/test_config.json"
+	err = DumpConfig(jsonFile, &conf)
+	assert.Nil(t, err)
+
+	bufJson, err := afero.ReadFile(fs, jsonFile)
+	assert.Nil(t, err)
+	assert.Equal(t, contentJson, string(bufJson))
+
+	tomlFile := "/tmp/test_config.toml"
+	err = DumpConfig(tomlFile, &conf)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "[toml] is not supported")
 }
 
 func TestEnvValue(t *testing.T) {

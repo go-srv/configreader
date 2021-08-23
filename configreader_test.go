@@ -465,10 +465,6 @@ func TestAnonymousNestedConfigRequired(t *testing.T) {
 		BaseStruct `key:",squash"`
 	}
 
-	type MyStruct2 struct {
-		BaseStruct
-	}
-
 	conf := MyStruct{}
 
 	AddConfigPath("/tmp")
@@ -499,10 +495,6 @@ func TestAnonymousNestedConfigRequiredNotSet(t *testing.T) {
 		BaseStruct `key:",squash"`
 	}
 
-	type MyStruct2 struct {
-		BaseStruct
-	}
-
 	conf := MyStruct{}
 
 	AddConfigPath("/tmp")
@@ -513,23 +505,138 @@ func TestAnonymousNestedConfigRequiredNotSet(t *testing.T) {
 	assert.Equal(t, "", conf.Base)
 }
 
-func TestValidationOK(t *testing.T) {
+func TestValidationInt(t *testing.T) {
 	defer testTearDown()
-
 	fs := afero.NewMemMapFs()
 
 	SetFs(fs)
 
 	configData := []byte(`{
-		"val": "2"
+		"ki": "2",
+		"kr": "3"
 	}`)
 	filename := "/tmp/config.json"
 	err := writeFile(fs, filename, configData)
 	assert.Nil(t, err)
 
 	type Conf struct {
-		Val   int `validation:"range:[2, 9]"`
+		Ki    int `validation:"in:[2, 9]"`
+		Kr    int `validation:"range:[2, 9]"`
 		NoVal int `validation:"range:[2, 9]"`
+	}
+
+	conf := Conf{}
+
+	SetConfigName("config")
+	AddConfigPath("/tmp")
+
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+}
+
+func TestValidationUint(t *testing.T) {
+	defer testTearDown()
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"ki": "2",
+		"kr": "3"
+	}`)
+	filename := "/tmp/config.json"
+	err := writeFile(fs, filename, configData)
+	assert.Nil(t, err)
+
+	type Conf struct {
+		Ki    uint `validation:"in:[2, 9]"`
+		Kr    uint `validation:"range:[2, 9]"`
+		NoVal uint `validation:"range:[2, 9]"`
+	}
+
+	conf := Conf{}
+
+	SetConfigName("config")
+	AddConfigPath("/tmp")
+
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+}
+
+func TestValidationFloat(t *testing.T) {
+	defer testTearDown()
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"ki": "2",
+		"kr": "3"
+	}`)
+	filename := "/tmp/config.json"
+	err := writeFile(fs, filename, configData)
+	assert.Nil(t, err)
+
+	type Conf struct {
+		Ki    float32 `validation:"in:[2, 9]"`
+		Kr    float32 `validation:"range:[2, 9]"`
+		NoVal float32 `validation:"range:[2, 9]"`
+	}
+
+	conf := Conf{}
+
+	SetConfigName("config")
+	AddConfigPath("/tmp")
+
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+}
+
+func TestValidationString(t *testing.T) {
+	defer testTearDown()
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"ki": "2"
+	}`)
+	filename := "/tmp/config.json"
+	err := writeFile(fs, filename, configData)
+	assert.Nil(t, err)
+
+	type Conf struct {
+		Ki    string `validation:"in:[2, 9]"`
+		NoVal uint   `validation:"range:[2, 9]"`
+	}
+
+	conf := Conf{}
+
+	SetConfigName("config")
+	AddConfigPath("/tmp")
+
+	err = LoadConfig(&conf)
+	assert.Nil(t, err)
+}
+
+func TestValidationDuration(t *testing.T) {
+	defer testTearDown()
+	fs := afero.NewMemMapFs()
+
+	SetFs(fs)
+
+	configData := []byte(`{
+		"ki": "2s",
+		"kr": "3m"
+	}`)
+	filename := "/tmp/config.json"
+	err := writeFile(fs, filename, configData)
+	assert.Nil(t, err)
+
+	type Conf struct {
+		Ki    time.Duration `validation:"in:[2s, 9s]"`
+		Kr    time.Duration `validation:"range:[2s, 9m]"`
+		NoVal time.Duration `validation:"range:[2s, 9m]"`
 	}
 
 	conf := Conf{}

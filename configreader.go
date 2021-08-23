@@ -503,36 +503,41 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 		typeName := structField.Type.String()
 		switch typeName {
 		case "time.Duration":
-			val := c.viper.GetDuration(fieldKey)
+			val := c.viper.GetDuration(fieldKey).Nanoseconds()
 			if inAction {
 				ok := false
 				for _, s := range ruleSplits {
 					s = strings.TrimSpace(s)
-					v, err := time.ParseDuration(s)
+					vd, err := time.ParseDuration(s)
 					if err != nil {
 						return validationBadVal
 					}
+					v := vd.Nanoseconds()
 
 					if val == v {
 						ok = true
+						return nil
 					}
 				}
 				if !ok {
 					return validationFailed
 				}
 			} else {
-				var lVal, rVal time.Duration
+				var lValDur, rValDur time.Duration
+				var lVal, rVal int64
 				if lAct != "inf" {
-					lVal, err = time.ParseDuration(lValStr)
+					lValDur, err = time.ParseDuration(lValStr)
 					if err != nil {
 						return validationBadVal
 					}
+					lVal = lValDur.Nanoseconds()
 				}
 				if rAct != "inf" {
-					rVal, err = time.ParseDuration(rValStr)
+					rValDur, err = time.ParseDuration(rValStr)
 					if err != nil {
 						return validationBadVal
 					}
+					rVal = rValDur.Nanoseconds()
 				}
 
 				if (lAct == ">=" && val < lVal) ||
@@ -541,6 +546,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					(rAct == "<" && val >= rVal) {
 					return validationFailed
 				}
+				return nil
 			}
 		}
 
@@ -553,6 +559,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					s = strings.TrimSpace(s)
 					if val == s {
 						ok = true
+						return nil
 					}
 				}
 				if !ok {
@@ -574,6 +581,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 
 					if math.Abs(val-v) < 1e-3 {
 						ok = true
+						return nil
 					}
 				}
 				if !ok {
@@ -600,6 +608,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					(rAct == "<" && val >= rVal) {
 					return validationFailed
 				}
+				return nil
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			val := c.viper.GetInt64(fieldKey)
@@ -614,6 +623,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 
 					if val == v {
 						ok = true
+						return nil
 					}
 				}
 				if !ok {
@@ -640,6 +650,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					(rAct == "<" && val >= rVal) {
 					return validationFailed
 				}
+				return nil
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			val := c.viper.GetUint64(fieldKey)
@@ -654,6 +665,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 
 					if val == v {
 						ok = true
+						return nil
 					}
 				}
 				if !ok {
@@ -680,7 +692,10 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					(rAct == "<" && val >= rVal) {
 					return validationFailed
 				}
+				return nil
 			}
+		default:
+			return validationBadVal
 		}
 	}
 

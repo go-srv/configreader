@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -561,6 +562,20 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					if val == s {
 						ok = true
 						return nil
+					}
+
+					last := len(s) - 1
+					sign := byte('\'')
+					if (len(s) > 3) && (s[0] == 'r') && (s[1] == sign) && (s[last] == sign) {
+						// This is a regex
+						s = s[2:last]
+						r, err := regexp.Compile(s)
+						if err != nil {
+							return validationBadVal
+						}
+						if r.MatchString(val) {
+							return nil
+						}
 					}
 				}
 				if !ok {

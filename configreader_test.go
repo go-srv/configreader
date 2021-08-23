@@ -722,7 +722,7 @@ func TestValidationString(t *testing.T) {
 	SetFs(fs)
 
 	configData := []byte(`{
-		"ki": "2",
+		"ki": "test",
 		"kr": "test"
 	}`)
 	filename := "/tmp/config.json"
@@ -730,7 +730,7 @@ func TestValidationString(t *testing.T) {
 	assert.Nil(t, err)
 
 	type Conf struct {
-		Ki    string `validation:"in:[2, 9]"`
+		Ki    string `validation:"in:[text, r't.*t']"`
 		Kr    string `validation:"range:[2, 8]"`
 		NoVal uint   `validation:"range:[2, 9]"`
 	}

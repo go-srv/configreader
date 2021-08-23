@@ -553,6 +553,7 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 		// Handle base types
 		switch structRef.Kind() {
 		case reflect.String:
+			val := c.viper.GetString(fieldKey)
 			if inAction {
 				ok := false
 				for _, s := range ruleSplits {
@@ -566,7 +567,29 @@ func (c *ConfigReader) validateValueOfField(fieldKey string, structField reflect
 					return validationFailed
 				}
 			} else {
-				return fmt.Errorf("string does not support range validation [%s]", validation)
+				// range in string means the range of the length
+				var lVal, rVal int64
+				if lAct != "inf" {
+					lVal, err = strconv.ParseInt(lValStr, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+				if rAct != "inf" {
+					rVal, err = strconv.ParseInt(rValStr, 10, 64)
+					if err != nil {
+						return validationBadVal
+					}
+				}
+
+				valLen := int64(len(val))
+				if (lAct == ">=" && valLen < lVal) ||
+					(lAct == ">" && valLen <= lVal) ||
+					(rAct == "<=" && valLen > rVal) ||
+					(rAct == "<" && valLen >= rVal) {
+					return validationFailed
+				}
+				return nil
 			}
 		case reflect.Float32, reflect.Float64:
 			val := c.viper.GetFloat64(fieldKey)

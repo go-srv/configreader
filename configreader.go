@@ -412,7 +412,10 @@ func (c *ConfigReader) bindFlagValue(fieldkey string, flagname string, defval st
 			flag = c.flagset.Lookup(flagname)
 		}
 
-		return c.viper.BindPFlag(fieldkey, flag)
+		// ignore flag if cannot find it
+		if flag != nil {
+			return c.viper.BindPFlag(fieldkey, flag)
+		}
 	}
 	return nil
 }
